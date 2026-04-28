@@ -11,14 +11,11 @@ def remove_hot_pixels(image, threshold=5):
     threshold: how many times above median to be considered a hot pixel
     """
     
-    # Median filtered version (3x3 neighborhood)
     med = median_filter(image, size=3)
 
-    # Identify hot pixels (outliers)
     diff = image - med
     mask = (image <= 0) | (image > med + threshold*np.std(diff))
 
-    # Replace hot pixels with median
     cleaned = image.copy()
     cleaned[mask] = med[mask]
     return cleaned
@@ -73,15 +70,15 @@ maps.append(sunpy.map.Map("data_15/aia_193_15.fits"))
 maps.append(sunpy.map.Map("data_15/aia_211_15.fits"))
 maps.append(sunpy.map.Map("data_15/aia_335_15.fits"))
 
-# Load interpolated response functions
+
 df = pd.read_csv('interpolated_data.csv')
 
-# Extract temperature grid
-logT = df['x'].values   # shape: (N,)
 
-# Extract response matrix (each column = one channel)
-channels = df.columns[1:]   # skip 'x'
-K = df[channels].values     # shape: (N, 6)
+logT = df['x'].values
+
+
+channels = df.columns[1:]
+K = df[channels].values
 K = K.T
 
 print("logT shape:", logT.shape)
@@ -89,19 +86,16 @@ print("K shape:", K.shape)
 
 #ny, nx = maps[0].data.shape
 
-#i0 = ny // 2
-#j0 = nx // 2
 i0 = 1650
 j0 = 1000
 p = 30
 
-# Extract 10x10 region (±5 pixels)
 cutouts = []
 for m in maps:
     cutout = m.data[i0-p:i0+p, j0-p:j0+p]
     cutouts.append(cutout)
 
-# Plot
+
 fig, axes = plt.subplots(2, 3, figsize=(10, 6))
 
 for ax, img, m in zip(axes.flatten(), cutouts, maps):
@@ -117,7 +111,7 @@ clean_cutouts = []
 for c in cutouts:
     clean_cutouts.append(remove_hot_pixels(c))
     
-# Plot
+
 fig, axes = plt.subplots(2, 3, figsize=(10, 6))
 
 for ax, img, m in zip(axes.flatten(), clean_cutouts, maps):
@@ -133,19 +127,13 @@ ny, nx = clean_cutouts[0].shape
 EM_map = np.zeros((ny, nx))
 for i in range(ny):
     for j in range(nx):
-        # شدت vector (6 channels)
         I = np.array([c[i, j] for c in clean_cutouts])
         I = I.reshape(-1, 1)
-
-        # Build dg
         sigma = 0.2 * I.flatten()
         sigma = np.where(sigma == 0, 1e-10, sigma)
         dg = np.diag(sigma)
-
-        # Initial guess
         DEM0 = np.zeros((K.shape[1], 1))
 
-        # Solve DEM
         f = 1
         lam = 1.e-50
         DEM = solve_tikhonov(K, I, dg, DEM0, lam, f)
@@ -156,7 +144,6 @@ for i in range(ny):
 
         DEM = DEM.squeeze()
 
-        # Compute EM
         T = 10**logT
         dlogT = np.gradient(logT)
 
